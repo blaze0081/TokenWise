@@ -1,0 +1,6 @@
+tokenwise/.env
+tokenwise/tracker/migrations
+tokenwise/db.sqlite3
+tokenwise/tokenwise/__pycache__
+tokenwise/tracker/__pycache__
+tokenwise/tracker/management/commands/__pycache__
