@@ -52,12 +52,59 @@ class TransactionSerializer(serializers.ModelSerializer):
         return obj.amount / TOKEN_DECIMALS
 
     def to_representation(self, instance):
-        """Modify the final output to rename 'api_amount' to 'amount'."""
+        """Modify the final output to ensure correct field names and formats."""
         ret = super().to_representation(instance)
-        ret['amount'] = ret.pop('api_amount') # Rename field for the frontend
-        del ret['model_amount'] # Remove the raw amount field
-        # The frontend expects 'source' for protocol, not 'protocol'
+
+        # Ensure amount is correctly calculated and named
+        ret['amount'] = instance.amount / TOKEN_DECIMALS
+        if 'api_amount' in ret:
+            del ret['api_amount']
+        if 'model_amount' in ret:
+            del ret['model_amount']
+
+        # Ensure transaction_type is present
+        ret['transaction_type'] = instance.transaction_type
+
+        # Rename fields for frontend compatibility
         ret['source'] = ret.pop('protocol')
-        # The frontend expects 'wallet' for wallet_address
         ret['wallet'] = ret.pop('wallet_address')
+        
+        return ret
+
+
+class HistoricalTransactionSerializer(serializers.ModelSerializer):
+    """Serializer for the historical transaction data, using modern field names."""
+    id = serializers.CharField(source='signature', read_only=True)
+    wallet_address = serializers.CharField(source='wallet.address', read_only=True)
+    api_amount = serializers.SerializerMethodField(method_name='get_token_amount')
+
+    class Meta:
+        model = Transaction
+        fields = [
+            'id',
+            'signature',
+            'timestamp',
+            'wallet_address',
+            'transaction_type',
+            'api_amount',
+            'protocol',
+        ]
+
+    def get_token_amount(self, obj):
+        """Convert the raw transaction amount to a user-friendly token quantity."""
+        return obj.amount / TOKEN_DECIMALS
+
+    def to_representation(self, instance):
+        """Modify the final output to ensure correct field names and formats."""
+        ret = super().to_representation(instance)
+
+        # Ensure amount is correctly calculated and named
+        ret['amount'] = instance.amount / TOKEN_DECIMALS
+        if 'api_amount' in ret:
+            del ret['api_amount']
+
+        # Provide both 'source' and 'protocol' for frontend compatibility
+        ret['source'] = instance.protocol
+        ret['protocol'] = instance.protocol
+        
         return ret

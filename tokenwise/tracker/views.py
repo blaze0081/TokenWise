@@ -3,7 +3,7 @@ from rest_framework.pagination import PageNumberPagination
 import requests
 from django.core.cache import cache
 from .models import Wallet, Transaction
-from .serializers import WalletSerializer, TransactionSerializer
+from .serializers import WalletSerializer, TransactionSerializer, HistoricalTransactionSerializer
 
 
 class StandardResultsSetPagination(PageNumberPagination):
@@ -65,3 +65,24 @@ class TransactionViewSet(viewsets.ReadOnlyModelViewSet):
 
         return queryset
 
+
+class HistoricalTransactionViewSet(viewsets.ReadOnlyModelViewSet):
+    """API endpoint for historical transaction data with date filtering."""
+    serializer_class = HistoricalTransactionSerializer
+    pagination_class = StandardResultsSetPagination
+
+    def get_queryset(self):
+        """Filter transactions by a given date range."""
+        queryset = Transaction.objects.all().order_by('-timestamp')
+        start_date = self.request.query_params.get('start_date')
+        end_date = self.request.query_params.get('end_date')
+
+        if start_date:
+            queryset = queryset.filter(timestamp__gte=start_date)
+        if end_date:
+            # Add 1 day to the end_date to make it inclusive
+            from datetime import datetime, timedelta
+            end_date_dt = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
+            queryset = queryset.filter(timestamp__lt=end_date_dt)
+            
+        return queryset

@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { CoinGeckoClient } from 'coingecko-api-v3';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import { useRouter } from 'next/navigation';
+import { cache } from '../cache';
 
 // Define the structure of a Wallet object
 interface Wallet {
@@ -33,10 +35,19 @@ const SolanaStats = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const client = new CoinGeckoClient({ autoRetry: true });
-
     const fetchData = async () => {
+      const cacheKey = 'solana-stats';
+      const cachedData = cache.get(cacheKey);
+
+      if (cachedData) {
+        setStats(cachedData.stats);
+        setChartData(cachedData.chartData);
+        setLoading(false);
+        return;
+      }
+
       try {
+        const client = new CoinGeckoClient({ autoRetry: true });
         const coinData = await client.coinId({ 
           id: 'solana',
           localization: false,
@@ -47,26 +58,28 @@ const SolanaStats = () => {
           sparkline: false
         });
 
-        if (coinData.market_data) {
-          setStats({
-            price: coinData.market_data.current_price?.usd ?? 0,
-            price_change_percentage_24h: coinData.market_data.price_change_percentage_24h ?? 0,
-            market_cap: coinData.market_data.market_cap?.usd ?? 0,
-            total_volume: coinData.market_data.total_volume?.usd ?? 0,
-            circulating_supply: coinData.market_data.circulating_supply ?? 0,
-            total_supply: coinData.market_data.total_supply ?? 0,
-          });
-        }
+        const statsData = coinData.market_data ? {
+          price: coinData.market_data.current_price?.usd ?? 0,
+          price_change_percentage_24h: coinData.market_data.price_change_percentage_24h ?? 0,
+          market_cap: coinData.market_data.market_cap?.usd ?? 0,
+          total_volume: coinData.market_data.total_volume?.usd ?? 0,
+          circulating_supply: coinData.market_data.circulating_supply ?? 0,
+          total_supply: coinData.market_data.total_supply ?? 0,
+        } : null;
 
         const marketChart = await client.coinIdMarketChart({ id: 'solana', vs_currency: 'usd', days: 7 });
-        // The API returns an array of [timestamp, price] tuples. We use a type guard to ensure data integrity.
         const formattedChartData = marketChart.prices
           .filter((p): p is [number, number] => Array.isArray(p) && p.length === 2)
           .map((p) => ({
             date: new Date(p[0]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
             price: p[1],
           }));
-        setChartData(formattedChartData);
+
+        if (statsData) {
+          setStats(statsData);
+          setChartData(formattedChartData);
+          cache.set(cacheKey, { stats: statsData, chartData: formattedChartData }, 10 * 60 * 1000); // 10 minutes
+        }
 
       } catch (e) {
         console.error("Failed to fetch CoinGecko data", e);
@@ -152,6 +165,7 @@ export default function TopWalletDiscoveryPage() {
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
 
@@ -199,7 +213,12 @@ export default function TopWalletDiscoveryPage() {
             <tbody className="bg-gray-800 divide-y divide-gray-700">
               {wallets.map((wallet) => (
                 <tr key={wallet.address}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-200">{wallet.address}</td>
+                  <td 
+                    className="px-6 py-4 whitespace-nowrap text-sm font-mono text-blue-400 hover:text-blue-300 cursor-pointer"
+                    onClick={() => router.push(`/monitoring?address=${wallet.address}`)}
+                  >
+                    {wallet.address}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200 text-right">{wallet.token_quantity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200 text-right">${wallet.balance_usd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                 </tr>

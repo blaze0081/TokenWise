@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import axios, { AxiosResponse } from 'axios';
+import { cache } from '../../cache';
 
 // Define the structure of a Transaction object
 interface Transaction {
@@ -24,28 +25,43 @@ export default function HistoricalAnalysisPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
-  useEffect(() => {
-    async function fetchTransactions() {
-      try {
-        let allTransactions: Transaction[] = [];
-        let url: string | null = 'http://localhost:8000/api/transactions/';
-        while (url) {
-          const response: AxiosResponse<PaginatedTransactionsResponse> = await axios.get(url);
-          allTransactions = allTransactions.concat(response.data.results);
-          url = response.data.next;
-        }
-        setTransactions(allTransactions);
-      } catch (err) {
-        setError('Failed to fetch transaction data. Is the backend server running?');
-        console.error('API Error:', err);
-      } finally {
-        setLoading(false);
-      }
+  const fetchTransactions = async () => {
+    const cacheKey = `historicalTransactions-${startDate}-${endDate}`;
+    const cachedData = cache.get(cacheKey);
+    if (cachedData) {
+      setTransactions(cachedData);
+      setLoading(false);
+      return;
     }
 
+    setLoading(true);
+    setError(null);
+    try {
+      let allTransactions: Transaction[] = [];
+      let url: string | null = `http://localhost:8000/api/historical-transactions/?start_date=${startDate}&end_date=${endDate}`;
+
+      while (url) {
+        const response: AxiosResponse<PaginatedTransactionsResponse> = await axios.get(url);
+        allTransactions = allTransactions.concat(response.data.results);
+        url = response.data.next;
+      }
+      setTransactions(allTransactions);
+      cache.set(cacheKey, allTransactions);
+    } catch (err) {
+      setError('Failed to fetch transaction data. Is the backend server running?');
+      console.error('API Error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    // Fetch initial data without date filters
     fetchTransactions();
-  }, []);
+  }, []); // Run only once on initial load
 
   const formatTimestamp = (ts: string) => {
     return new Date(ts).toLocaleString();
@@ -54,6 +70,27 @@ export default function HistoricalAnalysisPage() {
   return (
     <div className="w-full p-6">
       <h1 className="text-3xl font-bold mb-6 text-white">Historical Analysis</h1>
+
+      <div className="flex space-x-4 mb-6">
+        <input
+          type="date"
+          value={startDate}
+          onChange={(e) => setStartDate(e.target.value)}
+          className="bg-gray-700 text-white p-2 rounded-lg"
+        />
+        <input
+          type="date"
+          value={endDate}
+          onChange={(e) => setEndDate(e.target.value)}
+          className="bg-gray-700 text-white p-2 rounded-lg"
+        />
+        <button
+          onClick={fetchTransactions}
+          className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg"
+        >
+          Apply Filter
+        </button>
+      </div>
 
       {loading && <p className="text-gray-400">Loading transaction data...</p>}
       {error && <p className="text-red-500 bg-red-900/20 p-4 rounded-lg">{error}</p>}

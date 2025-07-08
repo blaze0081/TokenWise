@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
-import axios from 'axios';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
+import axios, { AxiosResponse } from 'axios';
 
 // Define the structure of Wallet and Transaction objects
 interface Wallet {
@@ -10,7 +11,7 @@ interface Wallet {
 }
 
 interface Transaction {
-  id: number;
+  id: string; // Use signature as the unique ID
   timestamp: string;
   signature: string;
   source: string;
@@ -18,8 +19,16 @@ interface Transaction {
   transaction_type: 'buy' | 'sell' | 'unknown';
 }
 
+interface PaginatedTransactionsResponse {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: Transaction[];
+}
+
 export default function WalletMonitoringPage() {
-  const [walletAddress, setWalletAddress] = useState('');
+  const searchParams = useSearchParams();
+  const [walletAddress, setWalletAddress] = useState(searchParams.get('address') || '');
   const [monitoredWallet, setMonitoredWallet] = useState<Wallet | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
@@ -36,14 +45,19 @@ export default function WalletMonitoringPage() {
     setTransactions([]);
 
     try {
-      // Fetch wallet details and transactions concurrently
-      const [walletRes, txRes] = await Promise.all([
-        axios.get(`http://localhost:8000/api/wallets/${walletAddress}/`),
-        axios.get(`http://localhost:8000/api/transactions/?wallet=${walletAddress}`)
-      ]);
-
+      // Fetch wallet details
+      const walletRes = await axios.get(`http://localhost:8000/api/wallets/${walletAddress}/`);
       setMonitoredWallet(walletRes.data);
-      setTransactions(txRes.data);
+
+      // Fetch all pages of transactions
+      const allTransactions: Transaction[] = [];
+      let url: string | null = `http://localhost:8000/api/transactions/?wallet_address=${walletAddress}`;
+      while (url) {
+        const txRes: AxiosResponse<PaginatedTransactionsResponse> = await axios.get(url);
+        allTransactions.push(...txRes.data.results);
+        url = txRes.data.next;
+      }
+      setTransactions(allTransactions);
 
     } catch (err) {
       setError(`Failed to fetch data for wallet ${walletAddress}. Please check the address and try again.`);
@@ -52,6 +66,20 @@ export default function WalletMonitoringPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const addressFromUrl = searchParams.get('address');
+    if (addressFromUrl) {
+      setWalletAddress(addressFromUrl);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (walletAddress) {
+      handleMonitor();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walletAddress]);
 
   const formatTimestamp = (ts: string) => new Date(ts).toLocaleString();
 
@@ -102,16 +130,16 @@ export default function WalletMonitoringPage() {
                 </tr>
               </thead>
               <tbody className="bg-gray-800 divide-y divide-gray-700">
-                {transactions.map((t) => (
-                  <tr key={t.id}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{formatTimestamp(t.timestamp)}</td>
+                {transactions.map((tx) => (
+                  <tr key={tx.signature} className="bg-gray-800 hover:bg-gray-700">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{formatTimestamp(tx.timestamp)}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${t.transaction_type === 'buy' ? 'bg-green-900 text-green-200' : 'bg-red-900 text-red-200'}`}>
-                        {t.transaction_type}
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${tx.transaction_type === 'buy' ? 'bg-green-900 text-green-200' : 'bg-red-900 text-red-200'}`}>
+                        {tx.transaction_type}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200 text-right">{t.amount.toLocaleString()}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-300">{t.source}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200 text-right">{tx.amount.toLocaleString()}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-300">{tx.source}</td>
                   </tr>
                 ))}
               </tbody>
