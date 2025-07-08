@@ -2,15 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import axios, { AxiosResponse } from 'axios';
+import { API_BASE_URL } from '../../apiConfig';
 import { cache } from '../../cache';
-
 // Define the structure of a Transaction object
 interface Transaction {
   id: string;
   timestamp: string;
   signature: string;
   protocol: string;
-  api_amount: number;
+  amount: number;
   transaction_type: 'buy' | 'sell' | 'unknown';
   wallet_address: string;
 }
@@ -18,38 +18,30 @@ interface Transaction {
 // Define the structure for the paginated API response
 interface PaginatedTransactionsResponse {
   next: string | null;
+  previous: string | null;
   results: Transaction[];
 }
 
 export default function HistoricalAnalysisPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [nextPageUrl, setNextPageUrl] = useState<string | null>(null);
+  const [prevPageUrl, setPrevPageUrl] = useState<string | null>(null);
 
-  const fetchTransactions = async () => {
-    const cacheKey = `historicalTransactions-${startDate}-${endDate}`;
-    const cachedData = cache.get(cacheKey);
-    if (cachedData) {
-      setTransactions(cachedData);
-      setLoading(false);
-      return;
-    }
-
+  const fetchTransactions = async (page = 1) => {
     setLoading(true);
     setError(null);
     try {
-      let allTransactions: Transaction[] = [];
-      let url: string | null = `http://localhost:8000/api/historical-transactions/?start_date=${startDate}&end_date=${endDate}`;
-
-      while (url) {
-        const response: AxiosResponse<PaginatedTransactionsResponse> = await axios.get(url);
-        allTransactions = allTransactions.concat(response.data.results);
-        url = response.data.next;
-      }
-      setTransactions(allTransactions);
-      cache.set(cacheKey, allTransactions);
+            const url = `${API_BASE_URL}/historical-transactions/?start_date=${startDate}&end_date=${endDate}&page=${page}`;
+      const response: AxiosResponse<PaginatedTransactionsResponse> = await axios.get(url);
+      setTransactions(response.data.results);
+      setNextPageUrl(response.data.next);
+      setPrevPageUrl(response.data.previous);
+      setCurrentPage(page);
     } catch (err) {
       setError('Failed to fetch transaction data. Is the backend server running?');
       console.error('API Error:', err);
@@ -85,7 +77,7 @@ export default function HistoricalAnalysisPage() {
           className="bg-gray-700 text-white p-2 rounded-lg"
         />
         <button
-          onClick={fetchTransactions}
+          onClick={() => fetchTransactions(1)}
           className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg"
         >
           Apply Filter
@@ -96,7 +88,8 @@ export default function HistoricalAnalysisPage() {
       {error && <p className="text-red-500 bg-red-900/20 p-4 rounded-lg">{error}</p>}
 
       {!loading && !error && (
-        <div className="bg-gray-900 rounded-lg shadow-lg overflow-x-auto">
+        <>
+          <div className="bg-gray-900 rounded-lg shadow-lg overflow-x-auto">
           <table className="min-w-full">
             <thead className="bg-gray-700">
               <tr>
@@ -114,15 +107,15 @@ export default function HistoricalAnalysisPage() {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{formatTimestamp(t.timestamp)}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${t.transaction_type === 'buy' ? 'bg-green-900 text-green-200' : 'bg-red-900 text-red-200'}`}>
-                      {t.transaction_type}
+                      {t.transaction_type.toUpperCase()}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200 text-right">{typeof t.api_amount === 'number' ? t.api_amount.toLocaleString(undefined, { maximumFractionDigits: 2 }) : 'N/A'}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200 text-right">{t.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-300">{t.protocol}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-300">{t.wallet_address}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-blue-400 hover:underline">
                     <a href={`https://solscan.io/tx/${t.signature}`} target="_blank" rel="noopener noreferrer">
-                      {`${t.signature.substring(0, 6)}...${t.signature.substring(t.signature.length - 6)}`}
+                      {`${t.signature.substring(0, 8)}...${t.signature.substring(t.signature.length - 8)}`}
                     </a>
                   </td>
                 </tr>
@@ -130,6 +123,24 @@ export default function HistoricalAnalysisPage() {
             </tbody>
           </table>
         </div>
+        <div className="flex justify-between items-center mt-4">
+          <button 
+            onClick={() => fetchTransactions(currentPage - 1)} 
+            disabled={!prevPageUrl}
+            className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Previous
+          </button>
+          <span className="text-white">Page {currentPage}</span>
+          <button 
+            onClick={() => fetchTransactions(currentPage + 1)} 
+            disabled={!nextPageUrl}
+            className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Next
+          </button>
+        </div>
+        </>
       )}
     </div>
   );

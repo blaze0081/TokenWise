@@ -1,10 +1,13 @@
 import traceback
 import requests
+import subprocess
+import json
 from datetime import datetime
 from django.conf import settings
 from solana.rpc.api import Client
 from solders.pubkey import Pubkey
-from .models import Wallet, Transaction
+from pycoingecko import CoinGeckoAPI
+from .models import Wallet, Transaction, SolanaMetric
 
 class SolanaService:
     """A service for interacting with the Solana blockchain."""
@@ -17,6 +20,7 @@ class SolanaService:
         except IndexError:
             raise ValueError("SOLANA_RPC_URL in .env file is missing an API key.")
         self.api_base_url = "https://api.helius.xyz/v0/addresses"
+        self.coingecko_client = CoinGeckoAPI()
 
     def get_top_token_holders(self, limit=60):
         """Fetches the top token holders for the target token."""
@@ -44,9 +48,6 @@ class SolanaService:
         }
         
         try:
-            import subprocess
-            import json
-
             # Construct the full URL with parameters
             full_url = f"{api_url}?api-key={self.api_key}&limit={limit}"
             
@@ -134,4 +135,44 @@ class SolanaService:
             print(f"HTTP Error fetching transactions for {wallet_address}: {e}")
         except Exception as e:
             print(f"An error occurred while processing transactions for {wallet_address}: {type(e).__name__} - {e}")
+            traceback.print_exc()
+
+    def get_solana_market_data(self):
+        """Fetches Solana market data from CoinGecko and stores it in the database."""
+        print("Fetching Solana market data from CoinGecko...")
+        try:
+            # Fetch market stats
+            coin_data = self.coingecko_client.get_coin_by_id(
+                id='solana',
+                localization=False,
+                tickers=False,
+                market_data=True,
+                community_data=False,
+                developer_data=False,
+                sparkline=False
+            )
+
+            # Fetch 7-day market chart data
+            market_chart = self.coingecko_client.get_coin_market_chart_by_id(id='solana', vs_currency='usd', days=7)
+
+            # Combine all data into a single structure
+            combined_data = {
+                'price': coin_data['market_data']['current_price'].get('usd', 0),
+                'price_change_percentage_24h': coin_data['market_data'].get('price_change_percentage_24h', 0),
+                'market_cap': coin_data['market_data']['market_cap'].get('usd', 0),
+                'total_volume': coin_data['market_data']['total_volume'].get('usd', 0),
+                'circulating_supply': coin_data['market_data'].get('circulating_supply', 0),
+                'total_supply': coin_data['market_data'].get('total_supply', 0),
+                'chart_data': market_chart.get('prices', [])
+            }
+
+            # Store everything in a single database entry
+            SolanaMetric.objects.update_or_create(
+                name='solana_stats',
+                defaults={'data': combined_data}
+            )
+            print("Successfully fetched and stored combined Solana market data.")
+
+        except Exception as e:
+            print(f"An error occurred while fetching CoinGecko data: {e}")
             traceback.print_exc()

@@ -25,86 +25,43 @@ class WalletSerializer(serializers.ModelSerializer):
         return token_quantity * price
 
 class TransactionSerializer(serializers.ModelSerializer):
-    """Serializer for the Transaction model."""
-    id = serializers.CharField(source='signature', read_only=True)
+    """Standardized serializer for the Transaction model."""
     wallet_address = serializers.CharField(source='wallet.address', read_only=True)
-    # The 'amount' field in the API response.
-    api_amount = serializers.SerializerMethodField(method_name='get_token_amount')
-    # The raw 'amount' field from the model, not exposed in the API.
-    model_amount = serializers.IntegerField(source='amount', read_only=True)
+    amount = serializers.SerializerMethodField()
 
     class Meta:
         model = Transaction
         fields = [
-            'id',
             'signature',
             'timestamp',
             'wallet_address',
             'transaction_type',
-            'api_amount', # Expose the calculated amount
+            'amount',
             'protocol',
             'description',
-            'model_amount', # Temporarily include for calculation
         ]
 
-    def get_token_amount(self, obj):
+    def get_amount(self, obj):
         """Convert the raw transaction amount to a user-friendly token quantity."""
         return obj.amount / TOKEN_DECIMALS
-
-    def to_representation(self, instance):
-        """Modify the final output to ensure correct field names and formats."""
-        ret = super().to_representation(instance)
-
-        # Ensure amount is correctly calculated and named
-        ret['amount'] = instance.amount / TOKEN_DECIMALS
-        if 'api_amount' in ret:
-            del ret['api_amount']
-        if 'model_amount' in ret:
-            del ret['model_amount']
-
-        # Ensure transaction_type is present
-        ret['transaction_type'] = instance.transaction_type
-
-        # Rename fields for frontend compatibility
-        ret['source'] = ret.pop('protocol')
-        ret['wallet'] = ret.pop('wallet_address')
-        
-        return ret
 
 
 class HistoricalTransactionSerializer(serializers.ModelSerializer):
-    """Serializer for the historical transaction data, using modern field names."""
-    id = serializers.CharField(source='signature', read_only=True)
+    """Serializer for the historical transaction data, ensuring consistent field names."""
     wallet_address = serializers.CharField(source='wallet.address', read_only=True)
-    api_amount = serializers.SerializerMethodField(method_name='get_token_amount')
+    amount = serializers.SerializerMethodField()
 
     class Meta:
         model = Transaction
         fields = [
-            'id',
             'signature',
             'timestamp',
             'wallet_address',
             'transaction_type',
-            'api_amount',
+            'amount',
             'protocol',
         ]
 
-    def get_token_amount(self, obj):
+    def get_amount(self, obj):
         """Convert the raw transaction amount to a user-friendly token quantity."""
         return obj.amount / TOKEN_DECIMALS
-
-    def to_representation(self, instance):
-        """Modify the final output to ensure correct field names and formats."""
-        ret = super().to_representation(instance)
-
-        # Ensure amount is correctly calculated and named
-        ret['amount'] = instance.amount / TOKEN_DECIMALS
-        if 'api_amount' in ret:
-            del ret['api_amount']
-
-        # Provide both 'source' and 'protocol' for frontend compatibility
-        ret['source'] = instance.protocol
-        ret['protocol'] = instance.protocol
-        
-        return ret

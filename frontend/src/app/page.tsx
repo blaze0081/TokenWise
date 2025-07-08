@@ -2,10 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import axios from 'axios';
-import { CoinGeckoClient } from 'coingecko-api-v3';
+import { API_BASE_URL } from '../apiConfig';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { useRouter } from 'next/navigation';
-import { cache } from '../cache';
 
 // Define the structure of a Wallet object
 interface Wallet {
@@ -35,60 +34,25 @@ const SolanaStats = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchData = async () => {
-      const cacheKey = 'solana-stats';
-      const cachedData = cache.get(cacheKey);
-
-      if (cachedData) {
-        setStats(cachedData.stats);
-        setChartData(cachedData.chartData);
-        setLoading(false);
-        return;
-      }
-
+    const fetchSolanaData = async () => {
+      setLoading(true);
       try {
-        const client = new CoinGeckoClient({ autoRetry: true });
-        const coinData = await client.coinId({ 
-          id: 'solana',
-          localization: false,
-          tickers: false,
-          market_data: true,
-          community_data: false,
-          developer_data: false,
-          sparkline: false
-        });
-
-        const statsData = coinData.market_data ? {
-          price: coinData.market_data.current_price?.usd ?? 0,
-          price_change_percentage_24h: coinData.market_data.price_change_percentage_24h ?? 0,
-          market_cap: coinData.market_data.market_cap?.usd ?? 0,
-          total_volume: coinData.market_data.total_volume?.usd ?? 0,
-          circulating_supply: coinData.market_data.circulating_supply ?? 0,
-          total_supply: coinData.market_data.total_supply ?? 0,
-        } : null;
-
-        const marketChart = await client.coinIdMarketChart({ id: 'solana', vs_currency: 'usd', days: 7 });
-        const formattedChartData = marketChart.prices
-          .filter((p): p is [number, number] => Array.isArray(p) && p.length === 2)
-          .map((p) => ({
-            date: new Date(p[0]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-            price: p[1],
-          }));
-
-        if (statsData) {
-          setStats(statsData);
-          setChartData(formattedChartData);
-          cache.set(cacheKey, { stats: statsData, chartData: formattedChartData }, 10 * 60 * 1000); // 10 minutes
-        }
-
-      } catch (e) {
-        console.error("Failed to fetch CoinGecko data", e);
+                const response = await axios.get(`${API_BASE_URL}/solana-stats/`);
+        setStats(response.data);
+        // The chart data is now a part of the main stats object
+        const formattedChartData = response.data.chart_data.map((p: [number, number]) => ({
+          date: new Date(p[0]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          price: p[1],
+        }));
+        setChartData(formattedChartData);
+      } catch (error) {
+        console.error("Failed to fetch Solana stats from backend", error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchData();
+    fetchSolanaData();
   }, []);
 
   if (loading) {
@@ -173,7 +137,7 @@ export default function TopWalletDiscoveryPage() {
     async function fetchWallets() {
       setLoading(true);
       try {
-        const response = await axios.get(`http://localhost:8000/api/wallets/?page=${currentPage}`);
+                const response = await axios.get(`${API_BASE_URL}/wallets/?page=${currentPage}`);
         setWallets(response.data.results);
         setTotalPages(Math.ceil(response.data.count / 10)); // Assuming 10 items per page
       } catch (err) {

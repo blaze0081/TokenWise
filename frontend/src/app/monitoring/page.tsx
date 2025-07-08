@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import axios, { AxiosResponse } from 'axios';
+import { API_BASE_URL } from '../../apiConfig';
 
 // Define the structure of Wallet and Transaction objects
 interface Wallet {
@@ -14,7 +15,7 @@ interface Transaction {
   id: string; // Use signature as the unique ID
   timestamp: string;
   signature: string;
-  source: string;
+  protocol: string;
   amount: number;
   transaction_type: 'buy' | 'sell' | 'unknown';
 }
@@ -33,31 +34,36 @@ export default function WalletMonitoringPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [nextPageUrl, setNextPageUrl] = useState<string | null>(null);
+  const [prevPageUrl, setPrevPageUrl] = useState<string | null>(null);
 
-  const handleMonitor = async () => {
+  const handleMonitor = async (page = 1) => {
     if (!walletAddress) {
       setError('Please enter a wallet address.');
       return;
     }
     setLoading(true);
     setError(null);
-    setMonitoredWallet(null);
-    setTransactions([]);
+
+    if (page === 1) {
+      setMonitoredWallet(null);
+      setTransactions([]);
+    }
 
     try {
-      // Fetch wallet details
-      const walletRes = await axios.get(`http://localhost:8000/api/wallets/${walletAddress}/`);
-      setMonitoredWallet(walletRes.data);
-
-      // Fetch all pages of transactions
-      const allTransactions: Transaction[] = [];
-      let url: string | null = `http://localhost:8000/api/transactions/?wallet_address=${walletAddress}`;
-      while (url) {
-        const txRes: AxiosResponse<PaginatedTransactionsResponse> = await axios.get(url);
-        allTransactions.push(...txRes.data.results);
-        url = txRes.data.next;
+      if (page === 1) {
+                const walletRes = await axios.get(`${API_BASE_URL}/wallets/${walletAddress}/`);
+        setMonitoredWallet(walletRes.data);
       }
-      setTransactions(allTransactions);
+
+            const txUrl = `${API_BASE_URL}/transactions/?wallet_address=${walletAddress}&page=${page}`;
+      const txRes: AxiosResponse<PaginatedTransactionsResponse> = await axios.get(txUrl);
+      
+      setTransactions(txRes.data.results);
+      setNextPageUrl(txRes.data.next);
+      setPrevPageUrl(txRes.data.previous);
+      setCurrentPage(page);
 
     } catch (err) {
       setError(`Failed to fetch data for wallet ${walletAddress}. Please check the address and try again.`);
@@ -98,7 +104,7 @@ export default function WalletMonitoringPage() {
             className="flex-grow bg-gray-800 text-white placeholder-gray-500 rounded-md p-3 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <button
-            onClick={handleMonitor}
+            onClick={() => handleMonitor(1)}
             disabled={loading}
             className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-md disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
           >
@@ -129,21 +135,39 @@ export default function WalletMonitoringPage() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Protocol</th>
                 </tr>
               </thead>
-              <tbody className="bg-gray-800 divide-y divide-gray-700">
+                            <tbody className="bg-gray-800 divide-y divide-gray-700">
                 {transactions.map((tx) => (
                   <tr key={tx.signature} className="bg-gray-800 hover:bg-gray-700">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{formatTimestamp(tx.timestamp)}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${tx.transaction_type === 'buy' ? 'bg-green-900 text-green-200' : 'bg-red-900 text-red-200'}`}>
-                        {tx.transaction_type}
+                        {tx.transaction_type.toUpperCase()}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200 text-right">{tx.amount.toLocaleString()}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-300">{tx.source}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200 text-right">{tx.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-300">{tx.protocol}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+
+          <div className="flex justify-between items-center mt-4">
+            <button 
+              onClick={() => handleMonitor(currentPage - 1)} 
+              disabled={!prevPageUrl || loading}
+              className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Previous
+            </button>
+            <span className="text-white">Page {currentPage}</span>
+            <button 
+              onClick={() => handleMonitor(currentPage + 1)} 
+              disabled={!nextPageUrl || loading}
+              className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+            </button>
           </div>
         </div>
       )}

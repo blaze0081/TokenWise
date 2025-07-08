@@ -127,6 +127,11 @@ AUTH_PASSWORD_VALIDATORS = [
 
 
 # CORS Configuration
+# CORS Configuration
+# Allow all origins for development purposes. 
+# For production, this should be restricted to the frontend domain.
+CORS_ALLOW_ALL_ORIGINS = True
+
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:3000', # For Next.js development server
 ]

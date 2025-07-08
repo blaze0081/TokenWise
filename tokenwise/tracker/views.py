@@ -1,8 +1,13 @@
-from rest_framework import viewsets
+from rest_framework import viewsets, views
+from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
+from django.db.models import Sum, Q, Count
+from .tasks import refresh_data_task
+from django.http import JsonResponse
+from rest_framework import status
 import requests
 from django.core.cache import cache
-from .models import Wallet, Transaction
+from .models import Wallet, Transaction, SolanaMetric
 from .serializers import WalletSerializer, TransactionSerializer, HistoricalTransactionSerializer
 
 
@@ -29,17 +34,17 @@ class WalletViewSet(viewsets.ReadOnlyModelViewSet):
         return context
 
     def _get_solana_price(self):
-        price = cache.get('solana_price')
-        if price is None:
-            try:
-                url = "https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd"
-                response = requests.get(url, timeout=5)
-                response.raise_for_status()
-                price = response.json().get('solana', {}).get('usd', 0)
-                cache.set('solana_price', price, timeout=60)  # Cache for 60 seconds
-            except requests.exceptions.RequestException as e:
-                print(f"Error fetching Solana price: {e}")
-                price = 0
+        """Fetches the Solana price from the database."""
+        try:
+            # Fetch the price from the SolanaMetric model
+            stats_metric = SolanaMetric.objects.get(name='solana_stats')
+            price = stats_metric.data.get('price', 0)
+        except SolanaMetric.DoesNotExist:
+            print("Warning: Solana price not found in database. Returning 0.")
+            price = 0
+        except Exception as e:
+            print(f"Error fetching Solana price from database: {e}")
+            price = 0
         return price
 
 
@@ -86,3 +91,72 @@ class HistoricalTransactionViewSet(viewsets.ReadOnlyModelViewSet):
             queryset = queryset.filter(timestamp__lt=end_date_dt)
             
         return queryset
+
+
+class DashboardMetricsView(views.APIView):
+    """API endpoint to provide aggregated metrics for the dashboard."""
+
+    def get(self, request, *args, **kwargs):
+        # Define a scaling factor for token decimals (e.g., 10^9 for USDC)
+        # This should ideally be stored in settings or a model
+        DECIMALS = 10**9
+
+        # Calculate Total Volume
+        total_volume_agg = Transaction.objects.aggregate(total=Sum('amount'))
+        total_volume = (total_volume_agg['total'] or 0) / DECIMALS
+
+        # Calculate Buy and Sell Volume
+        buy_volume_agg = Transaction.objects.filter(transaction_type='BUY').aggregate(total=Sum('amount'))
+        buy_volume = (buy_volume_agg['total'] or 0) / DECIMALS
+
+        sell_volume_agg = Transaction.objects.filter(transaction_type='SELL').aggregate(total=Sum('amount'))
+        sell_volume = (sell_volume_agg['total'] or 0) / DECIMALS
+
+        # Calculate Net Direction
+        net_direction = buy_volume - sell_volume
+
+        # Calculate Total Transactions
+        total_transactions = Transaction.objects.count()
+
+        # Get Protocol Usage data
+        protocol_usage = Transaction.objects.values('protocol').annotate(count=Count('protocol')).order_by('-count')
+
+        data = {
+            'total_volume': total_volume,
+            'net_direction': net_direction,
+            'total_transactions': total_transactions,
+            'protocol_usage': list(protocol_usage)
+        }
+
+        return Response(data)
+
+
+class SolanaStatsView(views.APIView):
+    """API view to fetch cached Solana market data."""
+    def get(self, request, *args, **kwargs):
+        try:
+            # Fetch the single metric containing all combined data
+            solana_metric = SolanaMetric.objects.get(name='solana_stats')
+
+            # The data field now contains everything the frontend needs
+            return Response(solana_metric.data)
+        except SolanaMetric.DoesNotExist:
+            return Response(
+                {"error": "Solana market data not found. Please run the refresh command."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class RefreshDataView(views.APIView):
+    """API endpoint to trigger the data refresh command."""
+
+    def post(self, request, *args, **kwargs):
+        try:
+            # Trigger the Celery task to run in the background
+            refresh_data_task.delay()
+
+            return Response({"status": "Data refresh initiated"}, status=status.HTTP_202_ACCEPTED)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
