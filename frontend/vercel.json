@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://api.tokenwise.store/api/:path*"
+      "destination": "https://tokenwise.store/api/:path*"
     }
   ]
 }
