@@ -106,7 +106,7 @@ export default function HistoricalAnalysisPage() {
                 <tr key={t.id}>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{formatTimestamp(t.timestamp)}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${t.transaction_type === 'buy' ? 'bg-green-900 text-green-200' : 'bg-red-900 text-red-200'}`}>
+                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${t.transaction_type.toLowerCase() === 'buy' ? 'bg-green-900 text-green-200' : 'bg-red-900 text-red-200'}`}>
                       {t.transaction_type.toUpperCase()}
                     </span>
                   </td>

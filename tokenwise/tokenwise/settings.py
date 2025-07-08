@@ -179,4 +179,6 @@ CELERY_BEAT_SCHEDULE = {
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # TokenWise specific settings
+# The mint address for the token we are actually interested in, discovered from Helius API logs.
+# The old address was for Wrapped SOL, not the token shown in the transaction logs.
 TARGET_TOKEN_MINT_ADDRESS = '9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump'

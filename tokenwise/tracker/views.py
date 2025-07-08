@@ -97,20 +97,16 @@ class DashboardMetricsView(views.APIView):
     """API endpoint to provide aggregated metrics for the dashboard."""
 
     def get(self, request, *args, **kwargs):
-        # Define a scaling factor for token decimals (e.g., 10^9 for USDC)
-        # This should ideally be stored in settings or a model
-        DECIMALS = 10**9
-
         # Calculate Total Volume
         total_volume_agg = Transaction.objects.aggregate(total=Sum('amount'))
-        total_volume = (total_volume_agg['total'] or 0) / DECIMALS
+        total_volume = total_volume_agg['total'] or 0
 
         # Calculate Buy and Sell Volume
         buy_volume_agg = Transaction.objects.filter(transaction_type='BUY').aggregate(total=Sum('amount'))
-        buy_volume = (buy_volume_agg['total'] or 0) / DECIMALS
+        buy_volume = buy_volume_agg['total'] or 0
 
         sell_volume_agg = Transaction.objects.filter(transaction_type='SELL').aggregate(total=Sum('amount'))
-        sell_volume = (sell_volume_agg['total'] or 0) / DECIMALS
+        sell_volume = sell_volume_agg['total'] or 0
 
         # Calculate Net Direction
         net_direction = buy_volume - sell_volume

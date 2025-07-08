@@ -27,7 +27,6 @@ class WalletSerializer(serializers.ModelSerializer):
 class TransactionSerializer(serializers.ModelSerializer):
     """Standardized serializer for the Transaction model."""
     wallet_address = serializers.CharField(source='wallet.address', read_only=True)
-    amount = serializers.SerializerMethodField()
 
     class Meta:
         model = Transaction
@@ -41,15 +40,10 @@ class TransactionSerializer(serializers.ModelSerializer):
             'description',
         ]
 
-    def get_amount(self, obj):
-        """Convert the raw transaction amount to a user-friendly token quantity."""
-        return obj.amount / TOKEN_DECIMALS
-
 
 class HistoricalTransactionSerializer(serializers.ModelSerializer):
     """Serializer for the historical transaction data, ensuring consistent field names."""
     wallet_address = serializers.CharField(source='wallet.address', read_only=True)
-    amount = serializers.SerializerMethodField()
 
     class Meta:
         model = Transaction
@@ -61,7 +55,3 @@ class HistoricalTransactionSerializer(serializers.ModelSerializer):
             'amount',
             'protocol',
         ]
-
-    def get_amount(self, obj):
-        """Convert the raw transaction amount to a user-friendly token quantity."""
-        return obj.amount / TOKEN_DECIMALS

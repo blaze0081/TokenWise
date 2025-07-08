@@ -110,13 +110,26 @@ class SolanaService:
                 if tx_type == 'UNKNOWN':
                     continue
 
-                amount = int(transfer.get("rawTokenAmount", {}).get("tokenAmount", 0))
+                # The 'tokenAmount' field holds the human-readable, decimal-adjusted amount.
+                # Explicitly cast to float to handle potential string values from the API.
+                try:
+                    amount = float(transfer.get("tokenAmount", 0))
+                except (ValueError, TypeError):
+                    amount = 0.0
+
+                # If amount is zero, log the entire transaction for debugging and skip.
+                if amount == 0.0:
+                    print(f"[WARN] Skipping transaction {signature} due to zero amount. Full data:")
+                    print(json.dumps(tx_data, indent=2))
+                    continue
                 
-                protocol = None
+                # Robust protocol extraction
+                protocol = tx_data.get("source", "UNKNOWN") # Default to top-level source
                 events = tx_data.get("events", {})
                 if events and "swap" in events:
+                    # Use the more specific protocol from the swap event if available
                     program_info = events["swap"].get("programInfo", {})
-                    protocol = program_info.get("source")
+                    protocol = program_info.get("source", protocol)
 
                 Transaction.objects.create(
                     signature=signature,

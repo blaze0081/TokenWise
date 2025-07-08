@@ -140,7 +140,7 @@ export default function WalletMonitoringPage() {
                   <tr key={tx.signature} className="bg-gray-800 hover:bg-gray-700">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{formatTimestamp(tx.timestamp)}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${tx.transaction_type === 'buy' ? 'bg-green-900 text-green-200' : 'bg-red-900 text-red-200'}`}>
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${tx.transaction_type.toLowerCase() === 'buy' ? 'bg-green-900 text-green-200' : 'bg-red-900 text-red-200'}`}>
                         {tx.transaction_type.toUpperCase()}
                       </span>
                     </td>
