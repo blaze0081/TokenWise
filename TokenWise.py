@@ -51,21 +51,10 @@ def main():
         return
 
     # --- Prepare DataFrames ---
-    tx_list = []
-    for tx in transactions:
-        tx_list.append({
-            'timestamp': tx.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
-            'wallet_address': tx.wallet.address,
-            'transaction_type': tx.transaction_type,
-            'amount': tx.amount / 1_000_000,  # Convert from raw amount
-            'protocol': tx.protocol if tx.protocol else 'N/A',
-            'signature': tx.signature
-        })
-    tx_df = pd.DataFrame(tx_list)
-
-    # Ensure columns are in a specific order if needed
-    if not tx_df.empty:
-        tx_df = tx_df[['timestamp', 'wallet_address', 'transaction_type', 'amount', 'protocol', 'signature']]
+    tx_df = pd.DataFrame.from_records(transactions.values(
+        'timestamp', 'wallet__address', 'transaction_type', 'amount', 'protocol', 'signature'
+    ))
+    tx_df.rename(columns={'wallet__address': 'wallet_address'}, inplace=True)
 
     # --- Key Metrics ---
     st.header("Real-Time Transaction Insights")
@@ -111,13 +100,7 @@ def main():
     # --- Top Wallet Holders ---
     st.header("Top Wallet Holders")
     if wallets.exists():
-        wallet_list = []
-        for wallet in wallets:
-            wallet_list.append({
-                'Address': wallet.address,
-                'Token Quantity': f"{(wallet.balance / 1_000_000):,.2f}" # Convert and format
-            })
-        wallet_df = pd.DataFrame(wallet_list)
+        wallet_df = pd.DataFrame.from_records(wallets.values('address', 'balance'))
         st.dataframe(wallet_df, use_container_width=True)
     else:
         st.warning("No wallet data found.")
