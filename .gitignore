@@ -5,3 +5,4 @@ tokenwise/tokenwise/__pycache__
 tokenwise/tracker/__pycache__
 tokenwise/tracker/management/commands/__pycache__
 figma
+tokenwise/tokenwise/.env
