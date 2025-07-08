@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+'use client';
+
+import { useEffect, useState, useCallback } from 'react';
 import axios, { AxiosResponse } from 'axios';
 import { API_BASE_URL } from '../../apiConfig';
-import { cache } from '../../cache';
 // Define the structure of a Transaction object
 interface Transaction {
   id: string;
@@ -32,7 +33,7 @@ export default function HistoricalAnalysisPage() {
   const [nextPageUrl, setNextPageUrl] = useState<string | null>(null);
   const [prevPageUrl, setPrevPageUrl] = useState<string | null>(null);
 
-  const fetchTransactions = async (page = 1) => {
+  const fetchTransactions = useCallback(async (page = 1) => {
     setLoading(true);
     setError(null);
     try {
@@ -48,12 +49,12 @@ export default function HistoricalAnalysisPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [startDate, endDate]);
 
   useEffect(() => {
     // Fetch initial data without date filters
     fetchTransactions();
-  }, []); // Run only once on initial load
+  }, [fetchTransactions]); // Run only once on initial load
 
   const formatTimestamp = (ts: string) => {
     return new Date(ts).toLocaleString();

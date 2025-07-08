@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { API_BASE_URL } from '../apiConfig';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import { XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 
 // Define the structure of a Wallet object
 interface Wallet {
@@ -69,7 +70,7 @@ const SolanaStats = () => {
         {/* Left side: Stats */}
         <div className="md:col-span-1 space-y-4">
           <div className="flex items-center space-x-4">
-            <img src="https://assets.coingecko.com/coins/images/4128/large/solana.png" alt="Solana" className="w-12 h-12"/>
+            <Image src="https://assets.coingecko.com/coins/images/4128/large/solana.png" alt="Solana" width={48} height={48} />
             <div>
               <h2 className="text-2xl font-bold text-white">Solana <span className="text-gray-500">SOL</span></h2>
               <div className="flex items-baseline space-x-2">

@@ -15,7 +15,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning={true}>
-      <body className={`${GeistSans.className} bg-gray-900 text-gray-100`}>
+      <body className={`${GeistSans.className} bg-gray-900 text-gray-100`} suppressHydrationWarning={true}>
         <div className="flex min-h-screen">
           <Sidebar />
           <main className="flex-1 p-8 bg-gray-800">
