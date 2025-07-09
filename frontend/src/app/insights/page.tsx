@@ -3,21 +3,34 @@
 import { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 import { API_BASE_URL } from '../../apiConfig';
-import { Pie } from 'react-chartjs-2';
+import { Pie, Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   ArcElement,
   Tooltip,
   Legend,
+  CategoryScale,
+  LinearScale,
+  BarElement,
   ChartData,
 } from 'chart.js';
 
-ChartJS.register(ArcElement, Tooltip, Legend);
+ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
 
 // Define the structure for the dashboard data from the new endpoint
 interface ProtocolUsage {
   protocol: string;
   count: number;
+}
+
+interface WalletActivity {
+  wallet_address: string;
+  transaction_count: number;
+}
+
+interface PaginatedTransactionsResponse {
+  next: string | null;
+  results: { wallet_address: string }[];
 }
 
 interface DashboardData {
@@ -32,6 +45,8 @@ export default function InsightsDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [walletActivity, setWalletActivity] = useState<WalletActivity[]>([]);
+  const [loadingActivity, setLoadingActivity] = useState(true);
 
   const fetchDashboardData = useCallback(async () => {
     setLoading(true);
@@ -47,9 +62,53 @@ export default function InsightsDashboardPage() {
     }
   }, []);
 
+  const fetchWalletActivity = useCallback(async () => {
+    setLoadingActivity(true);
+    try {
+      let allTransactions: { wallet_address: string }[] = [];
+      let url: string | null = `${API_BASE_URL}/historical-transactions/`;
+      while (url) {
+        const response: { data: PaginatedTransactionsResponse } = await axios.get(url);
+        allTransactions = allTransactions.concat(response.data.results);
+        url = response.data.next;
+      }
+
+      const activityCounts = allTransactions.reduce((acc, tx) => {
+        acc[tx.wallet_address] = (acc[tx.wallet_address] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+      const sortedActivity = Object.entries(activityCounts)
+        .map(([wallet_address, transaction_count]) => ({ wallet_address, transaction_count }))
+        .sort((a, b) => b.transaction_count - a.transaction_count)
+        .slice(0, 10); // Top 10
+
+      setWalletActivity(sortedActivity);
+    } catch (err) {
+      setError('Failed to fetch wallet activity data.');
+      console.error(err);
+    } finally {
+      setLoadingActivity(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchDashboardData();
-  }, [fetchDashboardData]);
+    fetchWalletActivity();
+  }, [fetchDashboardData, fetchWalletActivity]);
+
+  const activityChartData: ChartData<'bar'> = {
+    labels: walletActivity.map(a => `${a.wallet_address.substring(0, 6)}...${a.wallet_address.substring(a.wallet_address.length - 4)}`),
+    datasets: [
+      {
+        label: 'Number of Transactions',
+        data: walletActivity.map(a => a.transaction_count),
+        backgroundColor: '#36A2EB',
+        borderColor: '#36A2EB',
+        borderWidth: 1,
+      },
+    ],
+  };
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -133,6 +192,39 @@ export default function InsightsDashboardPage() {
           <div className="bg-gray-800 p-6 rounded-lg">
             <h3 className="text-gray-400 text-sm font-medium">Total Transactions</h3>
             <p className="text-2xl font-semibold text-white">{dashboardData.total_transactions.toLocaleString()}</p>
+          </div>
+
+          {/* Protocol Usage Breakdown */}
+          {/* Wallet Activity Chart */}
+          <div className="md:col-span-2 lg:col-span-3 bg-gray-900 p-6 rounded-lg mt-6">
+            <h2 className="text-xl font-bold mb-4 text-white">Top 10 Wallets by Activity</h2>
+            {loadingActivity ? (
+              <p className="text-gray-400">Loading wallet activity...</p>
+            ) : (
+              <div style={{ height: '400px', width: '100%' }}>
+                <Bar
+                  data={activityChartData}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: { display: false },
+                    },
+                    scales: {
+                      y: {
+                        beginAtZero: true,
+                        ticks: { color: '#E2E8F0' },
+                        grid: { color: '#4A5568' },
+                      },
+                      x: {
+                        ticks: { color: '#E2E8F0' },
+                        grid: { color: '#4A5568' },
+                      },
+                    },
+                  }}
+                />
+              </div>
+            )}
           </div>
 
           {/* Protocol Usage Breakdown */}
