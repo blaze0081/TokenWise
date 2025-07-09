@@ -9,6 +9,7 @@ import requests
 from django.core.cache import cache
 from .models import Wallet, Transaction, SolanaMetric
 from .serializers import WalletSerializer, TransactionSerializer, HistoricalTransactionSerializer
+import logging
 
 
 class StandardResultsSetPagination(PageNumberPagination):
@@ -155,4 +156,5 @@ class RefreshDataView(views.APIView):
 
             return Response({"status": "Data refresh initiated"}, status=status.HTTP_202_ACCEPTED)
         except Exception as e:
+            logging.error(f"Failed to initiate data refresh task: {e}", exc_info=True)
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
