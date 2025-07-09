@@ -9,11 +9,15 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@types/file-saver": "^2.0.7",
+    "@types/papaparse": "^5.3.16",
     "axios": "^1.10.0",
     "chart.js": "^4.5.0",
     "coingecko-api-v3": "^0.0.31",
+    "file-saver": "^2.0.5",
     "geist": "^1.4.2",
     "next": "15.3.5",
+    "papaparse": "^5.5.3",
     "react": "^19.0.0",
     "react-chartjs-2": "^5.3.0",
     "react-dom": "^19.0.0",

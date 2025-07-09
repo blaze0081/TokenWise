@@ -3,6 +3,8 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import Papa from 'papaparse';
+import { saveAs } from 'file-saver';
 import axios, { AxiosResponse } from 'axios';
 import { API_BASE_URL } from '../../apiConfig';
 // Define the structure of a Transaction object
@@ -26,12 +28,35 @@ interface PaginatedTransactionsResponse {
 export default function HistoricalAnalysisPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [nextPageUrl, setNextPageUrl] = useState<string | null>(null);
   const [prevPageUrl, setPrevPageUrl] = useState<string | null>(null);
+
+  const fetchAllTransactionsForExport = async (): Promise<Transaction[]> => {
+    setExporting(true);
+    setError(null);
+    let allTransactions: Transaction[] = [];
+    let url: string | null = `${API_BASE_URL}/historical-transactions/?start_date=${startDate}&end_date=${endDate}`;
+
+    try {
+      while (url) {
+        const response: AxiosResponse<PaginatedTransactionsResponse> = await axios.get(url);
+        allTransactions = allTransactions.concat(response.data.results);
+        url = response.data.next;
+      }
+    } catch (err) {
+      setError('Failed to fetch all transaction data for export.');
+      console.error('API Error:', err);
+      return [];
+    } finally {
+      setExporting(false);
+    }
+    return allTransactions;
+  };
 
   const fetchTransactions = useCallback(async (page = 1) => {
     setLoading(true);
@@ -60,6 +85,30 @@ export default function HistoricalAnalysisPage() {
     return new Date(ts).toLocaleString();
   };
 
+  const exportToCSV = async () => {
+    const allTransactions = await fetchAllTransactionsForExport();
+    if (!allTransactions.length) {
+      alert('No transaction data to export.');
+      return;
+    }
+    const csv = Papa.unparse(allTransactions, {
+      header: true,
+    });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    saveAs(blob, `transactions_${startDate}_to_${endDate}.csv`);
+  };
+
+  const exportToJSON = async () => {
+    const allTransactions = await fetchAllTransactionsForExport();
+    if (!allTransactions.length) {
+      alert('No transaction data to export.');
+      return;
+    }
+    const json = JSON.stringify(allTransactions, null, 2);
+    const blob = new Blob([json], { type: 'application/json;charset=utf-8;' });
+    saveAs(blob, `transactions_${startDate}_to_${endDate}.json`);
+  };
+
   return (
     <div className="w-full p-6">
       <h1 className="text-3xl font-bold mb-6 text-white">Historical Analysis</h1>
@@ -77,15 +126,23 @@ export default function HistoricalAnalysisPage() {
           onChange={(e) => setEndDate(e.target.value)}
           className="bg-gray-700 text-white p-2 rounded-lg"
         />
+
         <button
-          onClick={() => fetchTransactions(1)}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg"
+          onClick={exportToCSV}
+          className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg"
         >
-          Apply Filter
+          Export CSV
+        </button>
+        <button
+          onClick={exportToJSON}
+          className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg"
+        >
+          Export JSON
         </button>
       </div>
 
       {loading && <p className="text-gray-400">Loading transaction data...</p>}
+      {exporting && <p className="text-yellow-400">Exporting all data, please wait...</p>}
       {error && <p className="text-red-500 bg-red-900/20 p-4 rounded-lg">{error}</p>}
 
       {!loading && !error && (
